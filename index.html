@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地元企業攻略RPG</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=BIZ+UDGothic&display=swap');
+  
+  :root {
+    --rpg-font: 'DotGothic16', 'BIZ UDGothic', sans-serif;
+    --text-font: 'BIZ UDGothic', sans-serif;
+  }
+
+  body {
+    background-color: #000;
+    color: #fff;
+    font-family: var(--text-font);
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  #game-container {
+    width: 100%;
+    max-width: 800px;
+    height: 100vh;
+    max-height: 600px;
+    border: 4px solid #fff;
+    border-radius: 8px;
+    background-color: #111;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-sizing: border-box;
+  }
+
+  /* ステータスバー（上部） */
+  #status-bar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    z-index: 10;
+    pointer-events: none;
+    font-family: var(--rpg-font);
+    font-size: 1.2rem;
+    text-shadow: 2px 2px 0 #000;
+  }
+  
+  #item-list { pointer-events: auto; }
+  .item-btn {
+    background: #004400;
+    color: #fff;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    padding: 2px 8px;
+    margin-left: 5px;
+    cursor: pointer;
+    font-family: var(--text-font);
+    font-size: 0.9rem;
+  }
+  .item-btn:hover { background: #006600; }
+
+  /* メインスクリーン（画像表示領域） */
+  #screen-area {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding-top: 40px;
+  }
+  #screen-img {
+    max-width: 90%;
+    max-height: 90%;
+    object-fit: contain;
+    transition: transform 0.1s;
+  }
+  
+  /* HP案内テロップ（イラストの右下に表示） */
+  #hp-hint {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #00ffff;
+    border: 1px solid #00ffff;
+    padding: 8px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    width: 140px;
+    white-space: normal;
+    z-index: 20;
+    box-shadow: 0 0 5px #00ffff;
+  }
+
+  /* 下部UI領域（テキストと選択肢） */
+  #ui-area {
+    height: 55%;
+    display: flex;
+    flex-direction: column;
+    border-top: 4px solid #fff;
+    background-color: #000;
+  }
+
+  #message-box {
+    flex: 1; 
+    min-height: 80px; 
+    padding: 15px;
+    font-size: 1.1rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-y: auto; 
+    border-bottom: 2px dashed #555;
+  }
+
+  #choices-box {
+    flex: 1.5; 
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px;
+    background-color: #0a0a0a;
+    overflow-y: auto;
+    align-content: flex-start;
+  }
+
+  .choice-btn {
+    flex: 1 1 calc(50% - 8px);
+    background: #000;
+    color: #fff;
+    border: 2px solid #fff;
+    border-radius: 6px;
+    padding: 12px 10px;
+    font-size: 1rem;
+    font-family: var(--text-font);
+    cursor: pointer;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .choice-btn:hover { background: #333; }
+  
+  .hidden { display: none !important; }
+
+  /* 企業HPリンク用 */
+  .hp-link {
+    background-color: #004d99;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 0.9rem;
+    border: 1px solid #4da6ff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    margin-left: 10px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .hp-link:hover { background-color: #4da6ff; color: #000; }
+
+  /* 確定ボタン用（第5問用） */
+  .confirm-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+    background-color: #8b0000;
+    border-color: #ff6666;
+    font-weight: bold;
+    text-align: center;
+    padding: 15px;
+  }
+
+  /* アニメーションエフェクト */
+  .shake { transform: translate(15px, 10px); }
+  .slash { animation: slashAnim 0.4s forwards; }
+  @keyframes slashAnim {
+    0% { clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+    50% { clip-path: polygon(0 0, 100% 0, 100% 40%, 0 40%); transform: translateX(-15px) rotate(-5deg); filter: brightness(2); }
+    100% { opacity: 0; }
+  }
+
+  /* コピーライト */
+  #copyright {
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    font-size: 0.8rem;
+    color: #666;
+    pointer-events: none;
+  }
+
+  /* 全画面入力用 */
+  #input-overlay {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+  }
+  #input-overlay input {
+    font-size: 1.5rem;
+    padding: 10px;
+    margin-bottom: 20px;
+    font-family: var(--text-font);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="status-bar" class="hidden">
+    <div id="hp-display">HP: ---</div>
+    <div id="item-list"></div>
+  </div>
+
+  <div id="screen-area">
+    <div id="hp-hint" class="hidden">（会社名の横にあるHPボタンを押すとホームページに飛ぶぞ！）</div>
+    <img id="screen-img" src="" alt="">
+  </div>
+
+  <div id="ui-area">
+    <div id="message-box"></div>
+    <div id="choices-box"></div>
+  </div>
+  
+  <div id="copyright">©KOKUZO</div>
+
+  <!-- 名前入力用オーバーレイ -->
+  <div id="input-overlay" class="hidden">
+    <h2>勇者の名前を入力してください</h2>
+    <input type="text" id="player-name-input" placeholder="名前">
+    <button class="choice-btn" id="name-submit-btn" style="flex:none; width:200px; justify-content:center;">決定</button>
+  </div>
+</div>
+
+<script>
+// --- 音声・BGM管理 ---
+const BGM = new Audio();
+BGM.loop = true;
+BGM.volume = 0.08; // 音量8%に大幅ダウン
+
+const bgmUrls = {
+  title: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/mu.mp3',
+  over: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261029matsukawa/main/over.mp3',
+  ending: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261029matsukawa/main/ed.mp3'
+};
+
+function playBGM(type) {
+  BGM.src = bgmUrls[type];
+  BGM.play().catch(e => console.log("Audio play prevented by browser"));
+}
+
+// --- 効果音ジェネレーター (Web Audio API) ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playTone(freq, type, duration, vol = 0.1) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function playBeep() { playTone(600, 'square', 0.05, 0.03); }
+function playSlash() {
+  playTone(800, 'sawtooth', 0.1, 0.2);
+  setTimeout(() => playTone(1200, 'square', 0.1, 0.2), 40);
+}
+function playDefeat() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.6);
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.6);
+}
+function playBuzz() { playTone(100, 'sawtooth', 0.3, 0.3); }
+
+// --- ゲームデータ ---
+const images = {
+  title1: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261029matsukawa/main/title.jpg',
+  title2: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/title2.jpg',
+  god: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261029matsukawa/main/kami.jpg',
+  over: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261029matsukawa/main/over.jpg',
+  zombie: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/zn.gif',
+  goblin: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/gb.gif',
+  minotaur: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/mi.gif',
+  dragon: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/dr.gif',
+  maou: 'https://raw.githubusercontent.com/t3takahashit3-cell/20261023chikuma/main/mao.gif'
+};
+
+let playerName = "勇者";
+let hp = 0;
+let items = [];
+let hasHiddenResurrection = false;
+let prologueScore = 0;
+let currentPhase = 0;
+let currentMonster = 0;
+let currentQuestionIndex = 0;
+
+// プロローグ問題
+const prologueQuestions = [
+  { q: "長野県で最も会社の数が多い業界は？", choices: ["飲食宿泊業", "小売業", "製造業", "情報通信業", "農林業"], ans: 1, item: "薬草" },
+  { q: "最も企業数が多い業界、働いている人が多い業界は？", choices: ["飲食宿泊業", "小売業", "製造業", "情報通信業", "農林業"], ans: 2, item: "魔法の杖" },
+  { q: "世の中に存在する「職業」の種類はどれくらい？", choices: ["約700種類", "約1,700種類", "約17,000種類", "約170,000種類"], ans: 2, item: "復活の書" },
+  { q: "長野県内の高校生で、県外に進学した人のうち、卒業時に長野県に戻ってくる人の割合（Uターン率）は？", choices: ["20～30％", "30～40％", "40～50％", "50～60％", "60～70％"], ans: 1, item: "奇跡のリンゴ" },
+  {
+    q: "この中で生産量が全国一位のものを５つ選んでください。\n真空ポンプ / そば / フルート / 唐辛子 / 印刷装置 / ギター / なめこ / 電機測定器 / 加工用トマト / りんご / 野菜漬物",
+    choices: ["真空ポンプ", "そば", "フルート", "唐辛子", "印刷装置", "ギター", "なめこ", "電機測定器", "加工用トマト", "りんご", "野菜漬物"],
+    ans: [0, 4, 5, 7, 8],
+    isMulti: true
+  }
+];
+
+// 本編モンスターデータ
+const monsters = [
+  {
+    name: "ゾンビ", img: images.zombie,
+    questions: [
+      { q: "本社は小諸市。小売業（スーパーマーケット）の中で県内NO1の売り上げを誇り、早くからオリジナルブランドの開発・販売も行っている企業は？", choices: ["長野県Aコープ", "デリシア", "ツルヤ", "ニシザワ", "ビッグ"], ans: 2 }
+    ]
+  },
+  {
+    name: "ゴブリン", img: images.goblin,
+    questions: [
+      { q: "「大正時代に書店として創業した歴史」や、上伊那エリアを中心にスーパーを展開し、実は「BOOKOFFやTSUTAYA」などのFC運営も手掛けているユニークな総合小売企業", choices: ["長野県Aコープ", "デリシア", "ツルヤ", "ニシザワ", "ビッグ"], ans: 3 },
+      { q: "本社は松川町。自動車や電子機器に使われる高度な「プラスチック精密成形」や「金型製作」を手掛け、確かな技術力で大手メーカーからも評価されるものづくり企業は？", choices: ["上松電子", "デンソーエアクール", "日本ピスコ", "前田製作所", "エフプラス"], ans: 4 }
+    ]
+  },
+  {
+    name: "ミノタウロス", img: images.minotaur,
+    questions: [
+      { q: "本社は飯田市。航空機やロケット、ハイブリッドカーなどのモーター制御に欠かせない角度センサー「レゾルバ」で世界トップシェアを誇るメーカーは？", choices: ["多摩川精機", "信州航空電子", "日本無線", "塚田理研工業", "日本発条"], ans: 0 },
+      { q: "本社は松本市。「ホテルブエナビスタ」や「上高地」などでホテル・旅館を展開し、信州の観光と最高のおもてなしを提供するアルピコグループの企業は？", choices: ["池の平ホテル＆リゾーツ", "星野リゾート", "中央アルプス観光", "アルピコホテルズ", "ホテル国際21"], ans: 3 }
+    ]
+  },
+  {
+    name: "ドラゴン", img: images.dragon,
+    questions: [
+      { q: "下伊那厚生病院など、県内で総合病院を運営！「農村医療」や予防活動の先駆けとして知られ、長野県の地域医療と健康長寿を支える医療グループは？", choices: ["輝山会記念病院", "上伊那医療生協", "JA長野厚生連", "長野県立病院機構", "伊那中央行政組合"], ans: 2 },
+      { q: "本社は飯田市。大型ショッピングモールなどに使われる「自走式立体駐車場」の建設で国内トップシェアを誇る企業は？", choices: ["ルートイン開発", "綿半ソリューションズ", "ヤマウラ", "神稲建設", "北野建設"], ans: 1 }
+    ]
+  },
+  {
+    name: "大魔王", img: images.maou,
+    questions: [
+      { q: "飯田市の「旭松食品」。トヨタ自動車と『国産大豆応援プロジェクト』でオレイン酸の多い高野豆腐を開発。その特徴に当てはまらないものは？", choices: ["大豆臭さ少なく優しい香り", "ふんわりやわらかな食感", "少量で高カロリー摂取が可能", "水分吸収力が高い", "食物繊維が豊富"], ans: 2 },
+      { q: "２０２４年度の売上が最も高い会社はどれ？", choices: ["KOA", "多摩川精機", "伊那食品工業", "タカノ", "ニシザワ"], ans: 0, postMsg: "１ KOA (50,679百万円)\n２ 多摩川精機 (44,667百万円)\n３ 伊那食品工業 (23,235百万円)\n４ タカノ (20,741百万円)\n５ ニシザワ (16,962百万円)" },
+      { q: "この中で、高卒就職の初任給（最初にもらえるお給料の金額）が一番高い企業は？", choices: ["伊那食品工業", "ツルヤ", "夏目工学", "竹内製作所", "長野県職員"], ans: 1, postMsg: "１ 伊那食品工業 203,000円\n２ ツルヤ 206,000円\n３ 夏目工学 174,500円\n４ 竹内製作所 203,000円\n５ 長野県職員 214,000円" }
+    ]
+  }
+];
+
+// --- ランダムシャッフル関数 ---
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+// データ初期化（設問と選択肢のランダム化）
+function initDataShuffle() {
+  prologueQuestions.forEach(q => {
+    if (!q.isMulti) {
+      const correctText = q.choices[q.ans];
+      shuffleArray(q.choices);
+      q.ans = q.choices.indexOf(correctText);
+    } else {
+      const correctTexts = q.ans.map(idx => q.choices[idx]);
+      shuffleArray(q.choices);
+      q.ans = correctTexts.map(txt => q.choices.indexOf(txt));
+    }
+  });
+
+  monsters.forEach(m => {
+    m.questions.forEach(q => {
+      const correctText = q.choices[q.ans];
+      shuffleArray(q.choices);
+      q.ans = q.choices.indexOf(correctText);
+    });
+    shuffleArray(m.questions);
+  });
+}
+
+// --- UI操作ヘルパー ---
+const msgBox = document.getElementById("message-box");
+const choicesBox = document.getElementById("choices-box");
+const screenImg = document.getElementById("screen-img");
+const hpDisplay = document.getElementById("hp-display");
+const itemList = document.getElementById("item-list");
+const statusBar = document.getElementById("status-bar");
+const hpHint = document.getElementById("hp-hint");
+
+let typeInterval;
+let skipTyping = false;
+
+function showText(text, callback) {
+  clearInterval(typeInterval);
+  msgBox.textContent = "";
+  let i = 0;
+  skipTyping = false;
+
+  msgBox.onclick = () => { skipTyping = true; };
+
+  typeInterval = setInterval(() => {
+    if (skipTyping) {
+      msgBox.textContent = text;
+      msgBox.scrollTop = msgBox.scrollHeight;
+      clearInterval(typeInterval);
+      msgBox.onclick = null;
+      if (callback) callback();
+      return;
+    }
+    
+    msgBox.textContent += text.charAt(i);
+    msgBox.scrollTop = msgBox.scrollHeight;
+    if (text.charAt(i) !== '\n' && text.charAt(i) !== ' ' && i % 2 === 0) playBeep();
+    i++;
+    if (i >= text.length) {
+      clearInterval(typeInterval);
+      msgBox.onclick = null;
+      if (callback) callback();
+    }
+  }, 40);
+}
+
+function clearChoices() { choicesBox.innerHTML = ""; }
+
+function addChoice(text, onClick, searchUrl = "") {
+  const btn = document.createElement("button");
+  btn.className = "choice-btn";
+  
+  const span = document.createElement("span");
+  span.textContent = text;
+  btn.appendChild(span);
+  
+  if (searchUrl) {
+    const a = document.createElement("a");
+    a.href = "https://www.google.com/search?q=" + encodeURIComponent(searchUrl);
+    a.target = "_blank";
+    a.className = "hp-link";
+    a.textContent = "HPへ";
+    
+    a.onclick = (e) => e.stopPropagation();
+    a.ontouchend = (e) => e.stopPropagation();
+    
+    btn.appendChild(a);
+  }
+
+  btn.onclick = onClick;
+  choicesBox.appendChild(btn);
+  return btn;
+}
+
+function updateStatus() {
+  hpDisplay.textContent = `HP: ${hp}`;
+  itemList.innerHTML = "";
+  items.forEach((item, idx) => {
+    if (item === "復活の書") return; // アイテム欄には復活の書を表示しない
+    const btn = document.createElement("button");
+    btn.className = "item-btn";
+    btn.textContent = item;
+    btn.onclick = () => useItem(idx);
+    itemList.appendChild(btn);
+  });
+}
+
+function takeDamage() {
+  playBuzz();
+  hp -= 10;
+  updateStatus();
+  
+  const originalText = msgBox.getAttribute("data-current-q");
+  msgBox.textContent = "ミス！ダメージを受けた！！\n\n" + originalText;
+  
+  if (hp <= 0) {
+    setTimeout(gameOver, 1000);
+  }
+}
+
+// --- アイテム処理 ---
+function useItem(idx) {
+  const item = items[idx];
+  items.splice(idx, 1);
+  
+  if (item === "薬草") {
+    hp += 10;
+    showText("薬草を使った！HPが10回復した！", () => setTimeout(() => showText(msgBox.getAttribute("data-current-q")), 1000));
+  } else if (item === "魔法の杖") {
+    reduceChoices();
+    showText("魔法の杖を使った！選択肢が減った！", () => setTimeout(() => showText(msgBox.getAttribute("data-current-q")), 1000));
+  } else if (item === "奇跡のリンゴ") {
+    hp += 20;
+    reduceChoices();
+    hasHiddenResurrection = true; 
+    showText("奇跡のリンゴを使った！HPが回復し、選択肢が減り、未知の力が宿った！", () => setTimeout(() => showText(msgBox.getAttribute("data-current-q")), 1500));
+  }
+  updateStatus();
+}
+
+function reduceChoices() {
+  const btns = document.querySelectorAll(".choice-btn");
+  let hiddenCount = 0;
+  btns.forEach(btn => {
+    if (btn.getAttribute("data-wrong") === "true" && hiddenCount < 2) {
+      btn.classList.add("hidden");
+      hiddenCount++;
+    }
+  });
+}
+
+// --- ゲーム進行 ---
+function startGame() {
+  initDataShuffle(); 
+  hpHint.classList.add("hidden");
+  screenImg.src = images.title1;
+  clearChoices();
+  showText("");
+  addChoice("スタート", () => {
+    playBGM('title');
+    screenImg.src = images.title2;
+    clearChoices();
+    showText("地元企業の知識を発揮し、立ちはだかる魔物たちを攻略するのだ。\n\nキミの選択が、この地域の未来を救う鍵となる……\nいざ、壮大な冒険の幕開けだ！！");
+    addChoice("冒険を始める", startPrologue);
+  });
+}
+
+function startPrologue() {
+  screenImg.src = images.god;
+  clearChoices();
+  showText("「勇者よ、旅立ちの前にあなたの能力を見極めるわ。\nまずは名前を聞かせなさい。」", () => {
+    document.getElementById("input-overlay").classList.remove("hidden");
+    document.getElementById("name-submit-btn").onclick = () => {
+      const input = document.getElementById("player-name-input").value;
+      if (input.trim() === "") return;
+      playerName = input;
+      document.getElementById("input-overlay").classList.add("hidden");
+      currentPhase = 0;
+      askPrologueQuestion();
+    };
+  });
+}
+
+let multiAnswers = [];
+function askPrologueQuestion() {
+  if (currentPhase >= prologueQuestions.length) {
+    if (prologueScore === 5) hp = 100;
+    else if (prologueScore >= 3) hp = 80;
+    else if (prologueScore >= 1) hp = 50;
+    else hp = 30;
+    
+    clearChoices();
+    showText(`旅立て、${playerName}よ！！！\n\n(初期HP: ${hp})`);
+    addChoice("旅立つ", () => {
+      BGM.pause();
+      statusBar.classList.remove("hidden");
+      updateStatus();
+      currentMonster = 0;
+      currentQuestionIndex = 0;
+      nextMonster();
+    });
+    return;
+  }
+
+  const qData = prologueQuestions[currentPhase];
+  clearChoices();
+  showText(`【質問${currentPhase + 1}】\n` + qData.q);
+  
+  if (qData.isMulti) {
+    multiAnswers = [];
+    qData.choices.forEach((c, i) => {
+      addChoice(c, function() {
+        if (this.style.background === "green") {
+          this.style.background = "#000";
+          multiAnswers = multiAnswers.filter(v => v !== i);
+        } else {
+          if (multiAnswers.length < 5) {
+            this.style.background = "green";
+            multiAnswers.push(i);
+          }
+        }
+        
+        const confirmBtn = document.getElementById("multi-confirm-btn");
+        if (confirmBtn) {
+          if (multiAnswers.length === 5) {
+            confirmBtn.style.opacity = "1";
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = "5つ選んだ！ 決定する";
+          } else {
+            confirmBtn.style.opacity = "0.5";
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = `あと ${5 - multiAnswers.length} つ選んでね`;
+          }
+        }
+      });
+    });
+    
+    const btn = document.createElement("button");
+    btn.className = "choice-btn confirm-btn";
+    btn.id = "multi-confirm-btn";
+    btn.textContent = "あと 5 つ選んでね";
+    btn.style.opacity = "0.5";
+    btn.disabled = true;
+    btn.onclick = () => {
+      if (multiAnswers.length !== 5) return;
+      let correctCount = 0;
+      multiAnswers.forEach(ans => { if (qData.ans.includes(ans)) correctCount++; });
+      if (correctCount === 5) prologueScore++;
+      currentPhase++;
+      askPrologueQuestion();
+    };
+    choicesBox.appendChild(btn);
+
+  } else {
+    qData.choices.forEach((c, i) => {
+      addChoice(c, () => {
+        if (i === qData.ans) {
+          prologueScore++;
+          if (qData.item) items.push(qData.item);
+        }
+        currentPhase++;
+        askPrologueQuestion();
+      });
+    });
+  }
+}
+
+function nextMonster() {
+  if (currentMonster >= monsters.length) {
+    gameClear();
+    return;
+  }
+  
+  const m = monsters[currentMonster];
+  screenImg.src = m.img;
+  screenImg.className = "";
+  if (currentMonster === monsters.length - 1) {
+    screenImg.style.opacity = 0;
+    setTimeout(() => { screenImg.style.transition = "opacity 2s"; screenImg.style.opacity = 1; }, 100);
+  }
+  
+  clearChoices();
+  hpHint.classList.add("hidden");
+  showText(`${m.name} が現れた！`, () => {
+    setTimeout(() => askMainQuestion(), 1500);
+  });
+}
+
+function askMainQuestion() {
+  const m = monsters[currentMonster];
+  const qData = m.questions[currentQuestionIndex];
+  
+  clearChoices();
+  
+  // 魔物⑤（大魔王）以外はHP案内テロップを表示
+  if (currentMonster !== 4) {
+    hpHint.classList.remove("hidden");
+  } else {
+    hpHint.classList.add("hidden");
+  }
+  
+  msgBox.setAttribute("data-current-q", qData.q);
+  showText(qData.q);
+  
+  qData.choices.forEach((c, i) => {
+    const isCorrect = (i === qData.ans);
+    const searchUrl = (currentMonster !== 4) ? c : ""; 
+    
+    const btn = addChoice(c, () => {
+      if (isCorrect) {
+        hpHint.classList.add("hidden"); 
+        if (currentQuestionIndex < m.questions.length - 1) {
+          playSlash();
+          screenImg.classList.add("shake");
+          setTimeout(() => screenImg.classList.remove("shake"), 300);
+          currentQuestionIndex++;
+          setTimeout(askMainQuestion, 1000);
+        } else {
+          playDefeat();
+          screenImg.classList.add("slash");
+          currentMonster++;
+          currentQuestionIndex = 0;
+          
+          if (qData.postMsg) {
+            clearChoices();
+            showText("【正解！】\n" + qData.postMsg, () => {
+              addChoice("次へ進む", () => {
+                screenImg.classList.remove("slash");
+                nextMonster();
+              });
+            });
+          } else {
+            setTimeout(() => {
+              screenImg.classList.remove("slash");
+              nextMonster();
+            }, 1500);
+          }
+        }
+      } else {
+        takeDamage();
+      }
+    }, searchUrl);
+    
+    if (!isCorrect) btn.setAttribute("data-wrong", "true");
+  });
+}
+
+function gameOver() {
+  hpHint.classList.add("hidden");
+  screenImg.src = images.over;
+  screenImg.className = "";
+  statusBar.classList.add("hidden");
+  clearChoices();
+  playBGM('over');
+  
+  showText(`勇者${playerName}よ、死んでしまうとはふがいない。\nこのままでは松川の平和は取り返せない。何としても再挑戦をしてほしい！`);
+  
+  // 復活の書（または奇跡のリンゴによる隠しフラグ）を所持している場合のみ表示
+  if (items.includes("復活の書") || hasHiddenResurrection) {
+    addChoice("復活の書（の力）を使う", () => {
+      if (items.includes("復活の書")) {
+        items = items.filter(i => i !== "復活の書");
+      } else {
+        hasHiddenResurrection = false;
+      }
+      hp = 50;
+      BGM.pause();
+      statusBar.classList.remove("hidden");
+      updateStatus();
+      screenImg.src = monsters[currentMonster].img;
+      askMainQuestion();
+    });
+  }
+  addChoice("最初から挑戦する", () => { location.reload(); });
+}
+
+function gameClear() {
+  hpHint.classList.add("hidden");
+  screenImg.src = images.title1;
+  statusBar.classList.add("hidden");
+  clearChoices();
+  playBGM('ending');
+  
+  showText(`おお、勇者${playerName}よ！\n見事すべての魔物を退け、この地に平和をもたらしてくれた！\n\nキミの地元企業への深い知識と探究心は、これからの未来を切り拓く大きな力となるだろう。\n\n本当によくやってくれた！ありがとう、${playerName}！！`);
+  
+  addChoice("最初に戻る", () => { location.reload(); });
+}
+
+// 起動
+window.onload = startGame;
+
+</script>
+</body>
+</html>
